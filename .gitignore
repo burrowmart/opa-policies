@@ -1,0 +1,7 @@
+dist/
+.env
+node_modules
+opal/fetcher/node_modules/
+
+# Demo-only signing key — never commit. bundle/jwks.json (the public half) IS committed.
+demo/.keys/

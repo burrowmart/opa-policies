@@ -1,0 +1,18 @@
+{
+  "config": {
+    "entries": [
+      {
+        "url": "http://user-service.user-service.svc.cluster.local/internal/attributes",
+        "config": {
+          "headers": {
+            "authorization": "Bearer __SERVICE_TOKEN__"
+          }
+        },
+        "topics": ["policy_data"],
+        "dst_path": "/users",
+        "save_method": "PUT",
+        "periodic_update_interval": 300
+      }
+    ]
+  }
+}

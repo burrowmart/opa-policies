@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "kty": "RSA",
+      "n": "9WcWl5o_QUnQ6EnVXksT1NcRDAQCeY8VUisgRaCq3_bvaUz_PeGyCQxBd36_GXTP3qWwvtdX4bON7IyhoK3czGTD8-JDBfQdfm4jg0FbuErRoLFHVlWOij-3fl4KjeGUCRL0QLONkMtkWpZ1a44sVcm7M4-ItVIysTicNyjsHJjRBJBMAQpNprwjWleL4DSBQZ9OtQjq7n2JwjioZrI8JRETb_fDMXQnjzRi-R3XtL95KbVw8kHHCLyooPIKRhE8QysM4BVfjXd90UtCWOG9ghHVMDv5ErCAu9IS9qRZF6nwQCkapohBZXCVuDRbS5Jihc8NCtJfmTgZW2RWLck4Iw",
+      "e": "AQAB",
+      "kid": "archtenet-demo-2026",
+      "alg": "RS256",
+      "use": "sig"
+    }
+  ]
+}

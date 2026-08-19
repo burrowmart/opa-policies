@@ -1,0 +1,4 @@
+{
+  "revision": "v0.3.0",
+  "roots": ["policies", "envoy", "role_permissions", "jwks"]
+}
