@@ -7,8 +7,17 @@ DIST_DIR   := dist
 test:
 	opa test $(BUNDLE_DIR)/ -v
 
-## Build the signed bundle tarball that gets published to S3.
+## Build the bundle tarball that gets published to S3.
 ## The publish step (S3 upload + OPAL webhook) is handled by CI.
+##
+## Unsigned, deliberately for now: integrity rests on the S3 bucket being
+## private and reachable only through the PDP's IRSA role. Signing it would
+## mean `opa build --signing-key <pem> --signing-alg RS256`, which produces a
+## .signatures.json inside the tarball, plus a matching `keys:` block in the
+## PDP config (platform-infra/k8s/opa/configmap.yaml.template) so OPA rejects
+## a bundle it cannot verify — and therefore a private key in CI and its
+## public half distributed to every PDP. Worth doing if the bucket ever stops
+## being the only trust boundary.
 build:
 	mkdir -p $(DIST_DIR)
 	opa build -b $(BUNDLE_DIR)/ -o $(DIST_DIR)/bundle.tar.gz
