@@ -16,11 +16,27 @@ allow if {
 	resource_type_matches(perm.resource_type, input.resource.type)
 }
 
+# ── M2M: service principals ───────────────────────────────────────────────────
+# Machine callers (today: the OPAL fetcher's periodic /internal/attributes
+# sync) authenticate with a JWT whose email lives under the reserved
+# @archtenet.internal domain and carries no roles. Their grants come from
+# data.service_permissions — bundle-owned static config like
+# role_permissions, keyed by that email. Absence from the table means no
+# grants at all, so no subject.type discriminator is needed: a human email
+# simply never has an entry, and a service email never appears in
+# data.users or holds a Cognito group.
+allow if {
+	some perm in data.service_permissions[input.subject.email]
+	action_matches(perm.action, input.action)
+	resource_type_matches(perm.resource_type, input.resource.type)
+}
+
 # ── ABAC: resource ownership ──────────────────────────────────────────────────
 # Grant when the authenticated subject is the owner of the resource.
-# user-service sets resource.attributes.ownerEmail at creation time; OPAL
-# streams it into OPA data under the user's email key.
-# Ownership only confers read/cancel — never write or admin actions.
+# ownerEmail arrives two ways: REST callers set resource.attributes per the
+# input contract (README.md), and the Envoy PEP derives it from the path for
+# user records (envoy.rego), the one resource type whose key IS the owner's
+# email. Ownership only confers read/cancel — never write or admin actions.
 allow if {
 	input.subject.email != ""
 	input.resource.attributes.ownerEmail != ""
@@ -31,17 +47,8 @@ allow if {
 		"payment:read",
 		"notification:read",
 		"chat:read",
+		"user:read",
 	}
-}
-
-# ── ABAC: shared organisational unit (inter-service / B2B) ───────────────────
-# Grant catalog/notification read access to subjects in the same department as
-# the resource.  Useful for seller-dashboard and support tooling.
-allow if {
-	input.subject.attributes.department != ""
-	input.resource.attributes.department != ""
-	input.subject.attributes.department == input.resource.attributes.department
-	input.action in {"catalog:read", "notification:read"}
 }
 
 # ── ABAC: verified subjects may read user-service ─────────────────────────────

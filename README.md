@@ -44,7 +44,6 @@ the application tier.
       "email": "alice@example.com",          // Cognito email claim; primary OPAL key
       "roles": ["buyer"],                     // Cognito groups or custom:roles claim
       "attributes": {                         // OPAL-pushed user attributes from user-service
-        "department": "engineering",
         "plan": "standard",
         "verified": true
       }
@@ -59,7 +58,6 @@ the application tier.
       "id": "ord-abc123",                     // Opaque resource ID (logged, not policy-evaluated)
       "attributes": {                         // Resource-level attributes for ABAC checks
         "ownerEmail": "alice@example.com",    // Set by the owning service at creation time
-        "department": "engineering",          // Optional — enables department-scoped ABAC
         "status": "pending"                   // Informational; not evaluated by current policy
       }
     }
@@ -77,7 +75,7 @@ the application tier.
 | `payment` | `initiate`, `read` |
 | `notification` | `read` |
 | `chat` | `send`, `read` |
-| `user` | `read`, `delete` |
+| `user` | `read`, `write`, `delete`, `read-attributes` |
 
 ---
 
@@ -89,7 +87,7 @@ the application tier.
 data.policies.authz.allow  →  boolean
 ```
 
-`false` unless at least one of the three rules below fires.
+`false` unless at least one of the four rules below fires.
 
 ### Rule priority (all independent OR)
 
@@ -97,11 +95,21 @@ data.policies.authz.allow  →  boolean
    `(action, resource.type)` pair.  Wildcard `"*"` matches any value.
    `data.role_permissions` is pushed by OPAL from user-service (keyed by role name).
 
-2. **ABAC — ownership** — `subject.email == resource.attributes.ownerEmail` **and**
-   `action` is in the safe read/cancel set.  Ownership never grants write or admin.
+2. **M2M — service principals** — the subject's email has an entry in
+   `data.service_permissions` (bundle-owned static config, keyed by email)
+   covering the `(action, resource.type)` pair. Service identities live under
+   the reserved `@archtenet.internal` domain, carry no roles, and never appear
+   in `data.users`. Today's only principal: `svc-opal-fetcher@archtenet.internal`,
+   granted exactly `user:read-attributes` for the OPAL periodic sync — NOT an
+   admin token.
 
-3. **ABAC — department** — subject and resource share the same `department` attribute
-   **and** `action` is `catalog:read` or `notification:read`.
+3. **ABAC — ownership** — `subject.email == resource.attributes.ownerEmail` **and**
+   `action` is in the safe read/cancel set (now including `user:read` — reading
+   one's own user record).  Ownership never grants write or admin.  On the PEP
+   path `envoy.rego` derives `ownerEmail` from the path for `/users/<email>`
+   (the one resource type keyed by the owner's email) and asserts the caller as
+   owner for the self-scoped `/profile`; for other resource types `ownerEmail`
+   must come from a REST caller per the input contract above.
 
 4. **ABAC — verified subject** — `subject.attributes.verified == true` **and**
    `action` is `user:read`. This is the rule the OPAL end-to-end demo flips:
@@ -109,7 +117,17 @@ data.policies.authz.allow  →  boolean
    which OPAL streams live from user-service's outbox — so un-verifying a
    user in user-service turns this from allow to deny with no redeploy.
 
----
+### What the PDP deliberately does NOT cover
+
+- **The async plane.** Saga commands, compensations, and outbox events travel
+  RabbitMQ and are authorized by broker access alone — the PDP is HTTP-only.
+  A deliberate demo trade-off, recorded here so it reads as a decision, not a gap.
+- **Instance-level scoping for opaque-id resources.** Orders, payments, and
+  conversations are keyed by ids the PDP has no PIP for, so "only your own
+  order" cannot be decided here; services enforce it themselves (e.g.
+  chat-service's membership check, called by ws-gateway before a channel join).
+  User records are the exception — their key is the owner's email, so the PEP
+  proves ownership from the path itself (rule 3).
 
 ## Data flow (OPAL integration)
 
@@ -127,8 +145,9 @@ user-service (outbox) ──RabbitMQ──► opal/fetcher ──POST /data/conf
 simplification, it's required: OPA rejects a Data API write to any path an
 active bundle declares as one of its `roots` (`400 path ... is owned by
 bundle "authz"` — found by testing, not by reading the docs first). Bundle
-`roots` only covers `policies`, `envoy`, `role_permissions`, `jwks` —
-`role_permissions` is genuinely static config so it stays bundle-owned;
+`roots` only covers `policies`, `envoy`, `role_permissions`,
+`service_permissions`, `jwks` — the two permission tables are genuinely
+static config so they stay bundle-owned;
 `users` is intentionally left unclaimed so OPAL (both the live outbox push
 and its own initial/periodic full-sync against user-service's
 `/internal/attributes`) is the only writer. If you add more OPAL-owned data

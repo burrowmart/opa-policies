@@ -136,3 +136,52 @@ test_abac_unverified_subject_read_deny if {
 	}
 		with data.role_permissions as {}
 }
+
+# ── Test 11: ownership also covers reading one's own user record ──────────────
+test_abac_owner_read_own_user_record_allow if {
+	authz.allow with input as {
+		"subject": {"email": "alice@example.com", "roles": [], "attributes": {}},
+		"action": "user:read",
+		"resource": {
+			"type": "user",
+			"id": "/users/alice@example.com",
+			"attributes": {"ownerEmail": "alice@example.com"},
+		},
+	}
+		with data.role_permissions as {}
+}
+
+# ── Test 12: M2M — service principal allowed its one scoped grant ─────────────
+opal_fetcher_perms := {"svc-opal-fetcher@archtenet.internal": [{"action": "user:read-attributes", "resource_type": "user"}]}
+
+test_service_principal_scoped_allow if {
+	authz.allow with input as {
+		"subject": {"email": "svc-opal-fetcher@archtenet.internal", "roles": [], "attributes": {}},
+		"action": "user:read-attributes",
+		"resource": {"type": "user", "id": "/internal/attributes", "attributes": {}},
+	}
+		with data.role_permissions as {}
+		with data.service_permissions as opal_fetcher_perms
+}
+
+# ── Test 13: M2M — service principal cannot exceed its grant ──────────────────
+test_service_principal_cannot_exceed_grant if {
+	not authz.allow with input as {
+		"subject": {"email": "svc-opal-fetcher@archtenet.internal", "roles": [], "attributes": {}},
+		"action": "user:delete",
+		"resource": {"type": "user", "id": "usr-1", "attributes": {}},
+	}
+		with data.role_permissions as {}
+		with data.service_permissions as opal_fetcher_perms
+}
+
+# ── Test 14: M2M — an email absent from the table gets nothing ────────────────
+test_unknown_service_email_deny if {
+	not authz.allow with input as {
+		"subject": {"email": "svc-rogue@archtenet.internal", "roles": [], "attributes": {}},
+		"action": "user:read-attributes",
+		"resource": {"type": "user", "id": "/internal/attributes", "attributes": {}},
+	}
+		with data.role_permissions as {}
+		with data.service_permissions as opal_fetcher_perms
+}

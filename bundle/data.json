@@ -1,34 +1,108 @@
 {
   "role_permissions": {
     "admin": [
-      { "action": "*", "resource_type": "*" }
+      {
+        "action": "*",
+        "resource_type": "*"
+      }
     ],
     "buyer": [
-      { "action": "order:create",       "resource_type": "order"        },
-      { "action": "order:read",          "resource_type": "order"        },
-      { "action": "catalog:read",        "resource_type": "catalog"      },
-      { "action": "cart:write",          "resource_type": "cart"         },
-      { "action": "cart:read",           "resource_type": "cart"         },
-      { "action": "payment:initiate",    "resource_type": "payment"      },
-      { "action": "payment:read",        "resource_type": "payment"      },
-      { "action": "notification:read",   "resource_type": "notification" },
-      { "action": "chat:send",           "resource_type": "chat"         },
-      { "action": "chat:read",           "resource_type": "chat"         }
+      {
+        "action": "order:create",
+        "resource_type": "order"
+      },
+      {
+        "action": "order:read",
+        "resource_type": "order"
+      },
+      {
+        "action": "catalog:read",
+        "resource_type": "catalog"
+      },
+      {
+        "action": "cart:write",
+        "resource_type": "cart"
+      },
+      {
+        "action": "cart:read",
+        "resource_type": "cart"
+      },
+      {
+        "action": "payment:initiate",
+        "resource_type": "payment"
+      },
+      {
+        "action": "payment:read",
+        "resource_type": "payment"
+      },
+      {
+        "action": "notification:read",
+        "resource_type": "notification"
+      },
+      {
+        "action": "chat:send",
+        "resource_type": "chat"
+      },
+      {
+        "action": "chat:read",
+        "resource_type": "chat"
+      }
     ],
     "seller": [
-      { "action": "catalog:write",       "resource_type": "catalog"      },
-      { "action": "catalog:read",        "resource_type": "catalog"      },
-      { "action": "order:read",          "resource_type": "order"        },
-      { "action": "notification:read",   "resource_type": "notification" },
-      { "action": "chat:send",           "resource_type": "chat"         },
-      { "action": "chat:read",           "resource_type": "chat"         }
+      {
+        "action": "catalog:write",
+        "resource_type": "catalog"
+      },
+      {
+        "action": "catalog:read",
+        "resource_type": "catalog"
+      },
+      {
+        "action": "order:read",
+        "resource_type": "order"
+      },
+      {
+        "action": "notification:read",
+        "resource_type": "notification"
+      },
+      {
+        "action": "chat:send",
+        "resource_type": "chat"
+      },
+      {
+        "action": "chat:read",
+        "resource_type": "chat"
+      }
     ],
     "support": [
-      { "action": "order:read",          "resource_type": "order"        },
-      { "action": "user:read",           "resource_type": "user"         },
-      { "action": "notification:read",   "resource_type": "notification" },
-      { "action": "chat:read",           "resource_type": "chat"         },
-      { "action": "payment:read",        "resource_type": "payment"      }
+      {
+        "action": "order:read",
+        "resource_type": "order"
+      },
+      {
+        "action": "user:read",
+        "resource_type": "user"
+      },
+      {
+        "action": "notification:read",
+        "resource_type": "notification"
+      },
+      {
+        "action": "chat:read",
+        "resource_type": "chat"
+      },
+      {
+        "action": "payment:read",
+        "resource_type": "payment"
+      }
+    ]
+  },
+  "service_permissions": {
+    "svc-opal-fetcher@archtenet.internal": [
+      {
+        "action": "user:read-attributes",
+        "resource_type": "user"
+      }
     ]
   }
 }

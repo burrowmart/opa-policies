@@ -1,4 +1,10 @@
 {
-  "revision": "v0.3.0",
-  "roots": ["policies", "envoy", "role_permissions", "jwks"]
+  "revision": "v0.4.0",
+  "roots": [
+    "policies",
+    "envoy",
+    "role_permissions",
+    "service_permissions",
+    "jwks"
+  ]
 }

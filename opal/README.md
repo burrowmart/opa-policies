@@ -23,9 +23,13 @@ The OPAL server's `OPAL_DATA_CONFIG_SOURCES` — NOT the live path above.
 This is what a newly-subscribed OPAL client fetches once at startup (initial
 full sync) and what gets re-fetched every 300s as a drift-correction safety
 net, both against user-service's `GET /internal/attributes` (bulk, no
-`?since`). `__SERVICE_TOKEN__` is substituted with a real admin-role JWT by
-the deploy script — see `platform-infra/k8s/opal/README.md` — and the
-resulting JSON is stored in a Secret, never committed with a real token.
+`?since`). `__SERVICE_TOKEN__` is substituted by the deploy script — see
+`platform-infra/k8s/opal/README.md` — with a JWT minted for the dedicated
+service identity `svc-opal-fetcher@archtenet.internal`, whose ONLY grant
+(`data.service_permissions` in the bundle) is `user:read-attributes` on this
+endpoint — deliberately not an admin token: the sync needs one GET, so that
+is all its credential can do. The resulting JSON is stored in a Secret,
+never committed with a real token.
 
 Why both a live push AND a periodic pull: the live push (via the fetcher) is
 what makes the demo's allow->deny transition fast: minted `user.attributes-changed`
@@ -40,5 +44,6 @@ credential accepted directly on `POST /data/config` (this is OPAL's own
 documented pattern for a trusted first-party data provider, not a shortcut
 specific to this repo) — used by both `fetcher/` and, indirectly, whoever
 constructs the Secret consumed by `data-config.template.json`'s `__SERVICE_TOKEN__`
-(a separate, unrelated JWT — that one authenticates to *user-service* via the
-Envoy/OPA `envoy.authz` bridge, not to OPAL).
+(a separate, unrelated JWT for `svc-opal-fetcher@archtenet.internal` — that
+one authenticates to *user-service* via the Envoy/OPA `envoy.authz` bridge
+with the scoped `user:read-attributes` grant, not to OPAL).
