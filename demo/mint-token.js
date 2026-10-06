@@ -9,7 +9,13 @@
  * and reads `email` + `cognito:groups` from it — nothing else in the claims
  * is trusted; attributes always come from data.users (OPAL), never the token.
  *
- * Usage: node mint-token.js <email> <role1,role2,...>
+ * Usage: node mint-token.js <email> <role1,role2,...> [ttl-seconds]
+ *
+ * ttl-seconds defaults to 3600. The long-TTL case is the demo deploy script
+ * (platform-infra/demo/opa-stack.sh) minting the svc-opal-fetcher token that
+ * gets baked into the opal-server-secrets Secret — a 1h token there would
+ * silently break OPAL's periodic re-sync an hour after deploy. Demo-only:
+ * in production this identity gets a real Cognito client-credentials token.
  */
 
 const crypto = require('crypto');
@@ -21,9 +27,14 @@ const ISSUER = 'archtenet-demo';
 const AUDIENCE = 'archtenet-demo-clients';
 const PRIVATE_KEY_PATH = path.join(__dirname, '.keys', 'private-key.pem');
 
-const [, , email, rolesArg] = process.argv;
+const [, , email, rolesArg, ttlArg] = process.argv;
 if (!email || !rolesArg) {
-  console.error('Usage: node mint-token.js <email> <role1,role2,...>');
+  console.error('Usage: node mint-token.js <email> <role1,role2,...> [ttl-seconds]');
+  process.exit(1);
+}
+const ttl = ttlArg ? Number(ttlArg) : 3600;
+if (!Number.isFinite(ttl) || ttl <= 0) {
+  console.error(`ttl-seconds must be a positive number, got: ${ttlArg}`);
   process.exit(1);
 }
 
@@ -47,7 +58,7 @@ const payload = {
   iss: ISSUER,
   aud: AUDIENCE,
   iat: now,
-  exp: now + 3600,
+  exp: now + ttl,
 };
 
 const signingInput = `${b64url(JSON.stringify(header))}.${b64url(JSON.stringify(payload))}`;

@@ -17,6 +17,13 @@ exchange and relays each event to the OPAL server as an inline `DataUpdate`
 (`POST /data/config`, `save_method: PUT`, `dst_path: /users/<email>`). This
 is the **live** update path — one event, one push, no polling.
 
+Failure handling: a failed push is parked in a TTL retry queue
+(`RETRY_DELAY_MS`, default 15s) and dead-lettered back into the work queue,
+up to 5 attempts, then lands in `opal.user-attributes-changed.dlq` for manual
+inspection — a silently dropped event would pin one user's authz data stale
+until the next periodic pull. A dead broker connection exits the process:
+the Deployment's `restartPolicy: Always` is the reconnect loop.
+
 ## data-config.template.json
 
 The OPAL server's `OPAL_DATA_CONFIG_SOURCES` — NOT the live path above.

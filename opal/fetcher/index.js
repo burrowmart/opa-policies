@@ -10,6 +10,13 @@
  * fetch — this is OPAL's own documented pattern for a data provider that
  * already has the payload in hand (see the "Trigger Data Updates" tutorial),
  * so it avoids a redundant HTTP round trip back to user-service per event.
+ *
+ * Failure handling: a failed push is parked in a TTL retry queue and comes
+ * back RETRY_DELAY_MS later (dead-lettered straight into our own queue via
+ * the default exchange), up to MAX_RETRIES times, then lands in the DLQ for
+ * manual inspection. A dead broker connection exits the process — the
+ * Deployment's restartPolicy (Always) is the reconnect loop; staying alive
+ * with a closed connection would just be a zombie consuming nothing.
  */
 
 const amqp = require('amqplib');
@@ -21,8 +28,13 @@ const OPAL_AUTH_MASTER_TOKEN = process.env.OPAL_AUTH_MASTER_TOKEN;
 const EXCHANGE = 'domain.events';
 const ROUTING_KEY = 'user.attributes-changed';
 const QUEUE = 'opal.user-attributes-changed';
+const RETRY_QUEUE = `${QUEUE}.retry`;
 const DLX = 'opal.user-attributes-changed.dlx';
 const MAX_RETRIES = 5;
+// Queue-level x-message-ttl is immutable after declaration: changing this
+// value requires deleting the retry queue first (assertQueue would fail with
+// PRECONDITION_FAILED against the old value).
+const RETRY_DELAY_MS = Number(process.env.RETRY_DELAY_MS || 15_000);
 
 if (!OPAL_AUTH_MASTER_TOKEN) {
   console.error('opal-fetcher: OPAL_AUTH_MASTER_TOKEN is required');
@@ -74,28 +86,65 @@ async function handle(ch, msg) {
       ch.nack(msg, false, false);
       return;
     }
+    // Park the message in the TTL retry queue instead of republishing to the
+    // shared topic exchange: sendToQueue targets only our own retry queue
+    // (republishing to domain.events would re-deliver the event to every
+    // other subscriber of this routing key too), and the TTL gives OPAL
+    // RETRY_DELAY_MS to recover instead of burning all retries in seconds.
     ch.ack(msg);
-    ch.publish(EXCHANGE, msg.fields.routingKey, msg.content, {
+    ch.sendToQueue(RETRY_QUEUE, msg.content, {
       ...msg.properties,
       headers: { ...msg.properties.headers, 'x-retry-count': retryCount + 1 },
     });
   }
 }
 
+function exitOnClose(what) {
+  return () => {
+    // No in-process reconnect: a Deployment restart (restartPolicy: Always,
+    // with backoff) is simpler and equivalent. Staying alive here would be a
+    // zombie — the consumer is gone, but nothing would notice.
+    console.error(`opal-fetcher: AMQP ${what} closed — exiting for the Deployment to restart the pod`);
+    process.exit(1);
+  };
+}
+
 async function main() {
   const conn = await amqp.connect(RABBITMQ_URL);
   // amqplib rethrows unhandled connection-level errors as an uncaught
-  // exception that kills the process — log instead so a transient blip
-  // doesn't take the fetcher down.
+  // exception that kills the process — log here; the paired 'close' event
+  // (which always follows) does the exit.
   conn.on('error', (err) => console.error('opal-fetcher: AMQP connection error', err));
+  conn.on('close', exitOnClose('connection'));
   const ch = await conn.createChannel();
+  ch.on('error', (err) => console.error('opal-fetcher: AMQP channel error', err));
+  ch.on('close', exitOnClose('channel'));
 
   await ch.assertExchange(EXCHANGE, 'topic', { durable: true });
   await ch.assertExchange(DLX, 'direct', { durable: true });
   await ch.assertQueue(QUEUE, { durable: true, arguments: { 'x-dead-letter-exchange': DLX } });
   await ch.bindQueue(QUEUE, EXCHANGE, ROUTING_KEY);
+  // Retry parking lot: expired messages dead-letter through the default
+  // exchange ('') whose routing key IS the destination queue name, landing
+  // back in our main queue after RETRY_DELAY_MS.
+  await ch.assertQueue(RETRY_QUEUE, {
+    durable: true,
+    arguments: {
+      'x-message-ttl': RETRY_DELAY_MS,
+      'x-dead-letter-exchange': '',
+      'x-dead-letter-routing-key': QUEUE,
+    },
+  });
   await ch.assertQueue(`${QUEUE}.dlq`, { durable: true });
+  // Two bindings, because the routing key at nack time depends on how the
+  // message last arrived: straight off the topic exchange it still carries
+  // ROUTING_KEY, but a retry-queue return rewrote it to QUEUE (that's what
+  // x-dead-letter-routing-key does) — and a message that exhausted
+  // MAX_RETRIES has always taken the retry path. Without the second binding
+  // the final nack would dead-letter with a key the DLX has no binding for,
+  // and RabbitMQ would silently drop it.
   await ch.bindQueue(`${QUEUE}.dlq`, DLX, ROUTING_KEY);
+  await ch.bindQueue(`${QUEUE}.dlq`, DLX, QUEUE);
 
   console.log(`opal-fetcher: bound to ${EXCHANGE}/${ROUTING_KEY}, pushing to ${OPAL_SERVER_URL}/data/config`);
 
